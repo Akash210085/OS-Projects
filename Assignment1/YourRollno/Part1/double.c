@@ -14,48 +14,50 @@ int main(int argc, char *argv[])
 	if (argc < 2)
 	{
 		printf("UNABLE TO EXECUTE\n");
+		return 0;
 	}
 	// Case 2: This is the last program (only value is given)
 	else if (argc == 2)
 	{
 		ull x = atoll(argv[1]);
 		ull result = 2 * x;
-		printf("%llu", result);
-		exit(result % 256);
+		printf("%llu\n", result);
+		return 0;
 	}
 
 	// Case 3: There are more programs after this one
+
+	ull x = atoll(argv[argc-1]);
+	ull result = 2 * x;
+
+	char **args = malloc(sizeof(char *) * (argc-1));
+	
+
+    char *newArg0 = malloc(strlen("./") + strlen(argv[1]) + 1);
+
+    strcpy(newArg0, "./");
+
+    strcat(newArg0, argv[1]);
+
+	args[0]=newArg0;
+
+	for(int i=1;i<argc-2;i++){
+		args[i]=argv[i+1];
+	}
+
+	char buffer[20];
+	sprintf(buffer,"%lld",result);
+	args[argc-2]=buffer;
+
+	args[argc-1]=NULL;
 
 	pid_t pid = fork();
 
 	if (pid == 0)
 	{
-		char **args = malloc(sizeof(char *) * argc);
-
-		for (int i = 1; i < argc; i++)
-			args[i - 1] = argv[i];
-
-		args[argc - 1] = NULL;
-
-		char *path = malloc(strlen(args[0]) + 3);
-		strcpy(path, "./");
-		strcat(path, args[0]);
-
-		 // Redirect child's stdout to /dev/null to suppress output
-        freopen("/dev/null", "w", stdout);
-		execvp(path, args);
+		execvp(args[0], args);
 		perror("UNABLE TO EXECUTE\n");
 		exit(1);
 	}
-
-	int status;
-	wait(&status);
-
-	ull value = WEXITSTATUS(status);
-	ull result = value * 2;
-	// fprintf(stderr, "%llu\n", result);
-	printf("%llu", result);
-	exit(result % 256);
-
 	return 0;
 }

@@ -3,6 +3,12 @@
 #include<string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+
+
+#define MAX_FILES 30000
+#define MAX_LINE_LEN 40
+#define BUFFER_SIZE (MAX_FILES * MAX_LINE_LEN)
+
 int main(int argc, char* argv[])
 {
 	
@@ -94,7 +100,14 @@ int main(int argc, char* argv[])
 		struct stat file_stat;
 		long long totalSize = 0;
 
-		char buffer[900000]="";
+		// Large buffer to hold all file info strings
+		char *allFilesInfo = malloc(BUFFER_SIZE);
+		if (!allFilesInfo) {
+			perror("malloc");
+			closedir(dir);
+			return 1;
+		}
+		allFilesInfo[0] = '\0';  // Initialize empty string
 		int offset = 0;
 
 		while ((entry = readdir(dir)) != NULL) {
@@ -112,7 +125,7 @@ int main(int argc, char* argv[])
 			}
 
 			// Append to buffer using sprintf
-			offset += sprintf(buffer + offset,
+			offset += sprintf(allFilesInfo + offset,
 							"file:%s,size:%ld,",
 							entry->d_name,
 							file_stat.st_size);
@@ -123,7 +136,7 @@ int main(int argc, char* argv[])
 		}
 		closedir(dir);
 
-		printf("totalSize: %lld, fileInformation: %s",totalSize,buffer);
+		printf("totalSize: %lld, fileInformation: %s",totalSize,allFilesInfo);
 
 
 	}else if (strcmp(argv[1], "-d") == 0)
