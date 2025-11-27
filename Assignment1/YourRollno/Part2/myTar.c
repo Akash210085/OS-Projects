@@ -3,11 +3,119 @@
 #include<string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <fcntl.h> 
+#include <unistd.h>
 
 
 #define MAX_FILES 30000
 #define MAX_LINE_LEN 40
 #define BUFFER_SIZE (MAX_FILES * MAX_LINE_LEN)
+
+int createTar(char *dirPath, char *tarName){
+
+	struct dirent *entry;
+	struct stat file_stat;
+	long long totalSize = 0;
+	int fileCount=0;
+
+
+	DIR *dir = opendir(dirPath);
+	if (!dir) {
+		perror("opendir");
+		return 1;
+	}
+
+	// Count files and Total Size
+	while ((entry = readdir(dir)) != NULL) {
+		if (strcmp(entry->d_name,".")==0 || strcmp(entry->d_name,"..")==0) continue;
+
+		// Build full path to the file
+		char fullpath[1024];
+		sprintf(fullpath, "%s/%s", dirPath, entry->d_name);
+
+		stat(fullpath,&file_stat);
+		fileCount++;
+		totalSize+=(long long)file_stat.st_size;
+	}
+	closedir(dir);
+
+	// Large buffer to hold all file info
+	char *allFilesInfo = malloc(BUFFER_SIZE);
+	if (!allFilesInfo) {
+		perror("malloc");
+		closedir(dir);
+		return 1;
+	}
+	int offset = sprintf(allFilesInfo, "%lld\n", totalSize);
+	offset+=sprintf(allFilesInfo+offset,"%d\n",fileCount);
+	
+
+	dir = opendir(dirPath);
+	while ((entry = readdir(dir)) != NULL) {
+		// Skip "." and ".."
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+
+		// Build full path to the file
+		char fullpath[1024];
+		sprintf(fullpath, "%s/%s", dirPath, entry->d_name);
+
+		if (stat(fullpath, &file_stat) == -1) {
+			perror("stat");
+			continue;
+		}
+
+		// Append to buffer using sprintf
+		offset += sprintf(allFilesInfo + offset,
+						"%s %ld\n",
+						entry->d_name,
+						file_stat.st_size);
+	}
+	closedir(dir);
+
+	printf("fileInformation: %s",allFilesInfo);
+
+	// Open archive file using open + write
+	int tarfd = open(tarName, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (tarfd < 0) { printf("Cannot create tar\n"); exit(1); }
+
+
+	write(tarfd, allFilesInfo, offset);
+
+	// Write separator
+	write(tarfd, "####DATA_START####\n", 20);
+
+
+	dir = opendir(dirPath);
+	while ((entry = readdir(dir)) != NULL) {
+		// Skip "." and ".."
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+
+		// Build full path to the file
+		char fullpath[1024];
+		sprintf(fullpath, "%s/%s", dirPath, entry->d_name);
+
+		int f = open(fullpath, O_RDONLY);
+		if (f < 0) continue;
+
+		char *chunk = malloc(1024);
+		int r;
+		while ((r = read(f, chunk, 1024)) > 0) {
+			write(tarfd, chunk, r);
+		}
+
+		free(chunk);
+		close(f);
+	}
+
+	closedir(dir);
+
+	close(tarfd);
+
+	printf("Tar created: mytar.tar\n");
+	return 0;
+}
 
 int main(int argc, char* argv[])
 {
@@ -15,18 +123,8 @@ int main(int argc, char* argv[])
 	if(strcmp(argv[1], "-c") == 0){
 		// create tar file
 
-		char *dirPath = malloc(strlen(argv[2]) + 1);
-		char *tarName = malloc(strlen(argv[3]) + 1);
-		strcpy(dirPath, argv[2]); 
-		strcpy(tarName, argv[3]);
+		
 		// printf("dirPath:%s tarName:%s\n", dirPath,tarName);
-
-
-		DIR *dir = opendir(dirPath);
-		if (!dir) {
-			perror("opendir");
-			return 1;
-		}
 
 		/*
 		typedef struct {
@@ -94,50 +192,11 @@ int main(int argc, char* argv[])
 
 
 		*/
-
-
-		struct dirent *entry;
-		struct stat file_stat;
-		long long totalSize = 0;
-
-		// Large buffer to hold all file info strings
-		char *allFilesInfo = malloc(BUFFER_SIZE);
-		if (!allFilesInfo) {
-			perror("malloc");
-			closedir(dir);
-			return 1;
-		}
-		allFilesInfo[0] = '\0';  // Initialize empty string
-		int offset = 0;
-
-		while ((entry = readdir(dir)) != NULL) {
-			// Skip "." and ".."
-			if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-				continue;
-
-			// Build full path to the file
-			char fullpath[1024];
-			sprintf(fullpath, "%s/%s", dirPath, entry->d_name);
-
-			if (stat(fullpath, &file_stat) == -1) {
-				perror("stat");
-				continue;
-			}
-
-			// Append to buffer using sprintf
-			offset += sprintf(allFilesInfo + offset,
-							"file:%s,size:%ld,",
-							entry->d_name,
-							file_stat.st_size);
-
-			
-			totalSize+=(long long)file_stat.st_size;
-			printf("File: %s, Size: %lld bytes\n", entry->d_name, (long long)file_stat.st_size);
-		}
-		closedir(dir);
-
-		printf("totalSize: %lld, fileInformation: %s",totalSize,allFilesInfo);
-
+	char *dirPath = malloc(strlen(argv[2]) + 1);
+	char *tarName = malloc(strlen(argv[3]) + 1);
+	strcpy(dirPath, argv[2]); 
+	strcpy(tarName, argv[3]);
+	createTar(dirPath,tarName);
 
 	}else if (strcmp(argv[1], "-d") == 0)
 	{
